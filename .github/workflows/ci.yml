@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+# A push that supersedes an in-flight run cancels it rather than letting both
+# finish. Keyed on the ref, so branches never cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checks:
     strategy:
@@ -30,7 +36,7 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy
-        run: mypy docintel tests
+        run: mypy docintel scripts tests
 
       - name: Pytest
         run: pytest

@@ -9,7 +9,10 @@ description = "Structured extraction from UK company filings, with grounding and
 requires-python = ">=3.13"
 
 dependencies = [
+    "httpx==0.28.1",
     "pydantic==2.13.4",
+    "pypdf==6.16.1",
+    "python-dotenv==1.2.3",
 ]
 
 [project.optional-dependencies]

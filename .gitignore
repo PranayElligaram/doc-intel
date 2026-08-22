@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 .env
 .env.*
+# ...but the documented, valueless template is committed.
+!.env.example
 data/cache/
 eval/results/*.raw.json
 .claude/settings.local.json

@@ -1,0 +1,56 @@
+# The corpus definition. One Companies House company number per line;
+# everything after a # is a comment.
+#
+# This file is committed on purpose. The alternative - searching the API at
+# fetch time - gives a different corpus to every person who runs it on every
+# day they run it, and a corpus that cannot be reproduced cannot support a
+# number in the README.
+#
+# SELECTION RATIONALE
+# A representative draw from Companies House is almost entirely micro-entities
+# filing abridged accounts that omit turnover, auditor and employee count. That
+# would make the gold set nearly all not_stated: plenty of abstention cases,
+# almost nothing testing extraction, and no way to tell a model that abstains
+# correctly from a model that extracts nothing. So the list is stratified and
+# deliberately top-heavy - roughly two thirds full audited accounts, one third
+# small and audit-exempt. The not_stated cases should be genuine and a
+# minority.
+#
+#   large listed PLC   full statutory accounts, audited, turnover and profit
+#                      before tax stated in millions or thousands under a scale
+#                      headline. Exercises the hard fields and the Scale
+#                      normalisation path. Also the tier least likely to be a
+#                      scan, which keeps the text-layer distribution readable.
+#   mid-size private   full accounts, audited, plain typesetting rather than a
+#                      designed annual report. Extraction without the visual
+#                      scaffolding.
+#   small company      abridged. Turnover often absent, employee count usually
+#                      present. Mixed cases.
+#   audit-exempt       no auditor exists to name. The cleanest not_stated we
+#                      have: truthfully absent, not missed.
+#
+# NOT YET VERIFIED. The numbers below were written from memory and have not
+# been checked against the live API. Running scripts/fetch_corpus.py resolves
+# them: anything wrong comes back as disposition=failed, reason=
+# company_not_found in the manifest, and should be corrected here. Treat the
+# first live run as the verification pass.
+
+# --- large listed PLC ---------------------------------------------------
+00445790   # Tesco PLC
+00185647   # J Sainsbury plc
+04256886   # Marks and Spencer Group plc
+00502851   # Greggs plc
+
+# --- mid-size private / subsidiary --------------------------------------
+# TODO: add 3-4. Good sources are the trading subsidiaries of the PLCs above -
+# they file full audited accounts with plain typesetting. Find them by company
+# name search on find-and-update.company-information.service.gov.uk.
+
+# --- small company (abridged) -------------------------------------------
+# TODO: add 2-3. Advanced company search, filter accounts type to "small" or
+# "abridged". Pick ones whose latest accounts are a PDF, not a scan, or the
+# text-layer distribution will be doing two jobs at once.
+
+# --- audit-exempt --------------------------------------------------------
+# TODO: add 2-3. Accounts type "micro-entity" or "unaudited abridged". These
+# are the genuine auditor_name = not_stated cases.

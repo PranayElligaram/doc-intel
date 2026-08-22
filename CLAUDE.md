@@ -6,7 +6,7 @@ measures grounding and abstention, not just accuracy.
 ## Environment
 - Python 3.13, venv at `.venv` (activate before launching claude)
 - Local model via Ollama. No paid APIs, no API keys for models, ever.
-- Commands: `pytest` | `ruff check .` | `ruff format .` | `mypy docintel tests`
+- Commands: `pytest` | `ruff check .` | `ruff format .` | `mypy docintel scripts tests`
 
 ## Architecture rules
 - No LangChain, no LlamaIndex. The chunker and retriever are written here on
