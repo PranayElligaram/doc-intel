@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(//C:/dev/impromptu/**)",
+      "Read(//c/dev/impromptu/**)",
+      "Edit(//C:/dev/impromptu/**)",
+      "Edit(//c/dev/impromptu/**)",
+      "Read(**/.env*)",
+      "Read(~/.ssh/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(pip install:*)",
+      "Bash(winget:*)"
+    ]
+  }
+}
