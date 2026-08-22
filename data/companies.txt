@@ -29,28 +29,37 @@
 #   audit-exempt       no auditor exists to name. The cleanest not_stated we
 #                      have: truthfully absent, not missed.
 #
-# NOT YET VERIFIED. The numbers below were written from memory and have not
-# been checked against the live API. Running scripts/fetch_corpus.py resolves
-# them: anything wrong comes back as disposition=failed, reason=
-# company_not_found in the manifest, and should be corrected here. Treat the
-# first live run as the verification pass.
+# PROVENANCE
+# These numbers were collected by hand from
+# find-and-update.company-information.service.gov.uk in August 2026.
+#
+# Tiers are NOT yet assigned. The fetcher records each filing's accounts type
+# from the filing history, so the tier for every number below comes from the
+# manifest after the first live fetch rather than from a reading of a web page.
+# Until that is done, the stratification described above is the intent, not a
+# statement about this list.
+#
+# The first fetch is only a partial check on the numbers themselves: a
+# transposed digit usually resolves to a real but different company rather than
+# a 404, so the company names in the manifest are worth a glance before the
+# corpus is trusted.
 
-# --- large listed PLC ---------------------------------------------------
-00445790   # Tesco PLC
-00185647   # J Sainsbury plc
-04256886   # Marks and Spencer Group plc
-00502851   # Greggs plc
-
-# --- mid-size private / subsidiary --------------------------------------
-# TODO: add 3-4. Good sources are the trading subsidiaries of the PLCs above -
-# they file full audited accounts with plain typesetting. Find them by company
-# name search on find-and-update.company-information.service.gov.uk.
-
-# --- small company (abridged) -------------------------------------------
-# TODO: add 2-3. Advanced company search, filter accounts type to "small" or
-# "abridged". Pick ones whose latest accounts are a PDF, not a scan, or the
-# text-layer distribution will be doing two jobs at once.
-
-# --- audit-exempt --------------------------------------------------------
-# TODO: add 2-3. Accounts type "micro-entity" or "unaudited abridged". These
-# are the genuine auditor_name = not_stated cases.
+# --- unclassified: tier to be filled in from the first fetch -------------
+00445790
+04256886
+01003142
+04120344
+04412362
+00102498
+00041424
+03888792
+04031152
+01470151
+02723534
+04366849
+08210613
+10772897
+04521173
+01187031
+08200310
+13204176
