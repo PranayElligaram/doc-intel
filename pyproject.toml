@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doc-intel"
+version = "0.1.0"
+description = "Structured extraction from UK company filings, with grounding and abstention evaluation."
+requires-python = ">=3.13"
+
+dependencies = [
+    "pydantic==2.13.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.16.4",
+    "mypy==2.3.1",
+]
+
+[tool.setuptools.packages.find]
+include = ["docintel*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+# line-length is inherited from [tool.ruff] above, so the formatter and the
+# linter cannot disagree about where a line is too long.
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+# tests/typing/should_fail.py is type-incorrect on purpose. Excluding it keeps
+# it out of directory recursion; mypy still checks a path passed explicitly on
+# the command line, which is what test_typing_guarantees.py relies on.
+exclude = ["^tests/typing/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# This exists to catch one specific footgun: an unparametrised generic -
+# Found(...) rather than Found[Money](...) - binds T to Any and silently skips
+# validation of the value. Pydantic reports it only as a serializer
+# UserWarning, so without this it passes unnoticed.
+# When a third-party deprecation starts failing the suite, add a targeted
+# "ignore::DeprecationWarning:somepackage" entry below. Do not drop the
+# "error" entry - that would restore the blind spot this is here to close.
+filterwarnings = ["error"]

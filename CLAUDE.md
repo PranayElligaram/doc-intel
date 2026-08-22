@@ -4,9 +4,9 @@ Structured extraction from UK company filings, with an evaluation harness that
 measures grounding and abstention, not just accuracy.
 
 ## Environment
-- Python 3.12, venv at `.venv` (activate before launching claude)
+- Python 3.13, venv at `.venv` (activate before launching claude)
 - Local model via Ollama. No paid APIs, no API keys for models, ever.
-- Commands: `pytest` | `ruff check .` | `mypy docintel`
+- Commands: `pytest` | `ruff check .` | `ruff format .` | `mypy docintel tests`
 
 ## Architecture rules
 - No LangChain, no LlamaIndex. The chunker and retriever are written here on
