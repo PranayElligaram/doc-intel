@@ -6,9 +6,10 @@ building, real header handling and real auth - only the socket is replaced.
 That is the point: a hand-rolled fake client would not catch the thing this
 file exists to check, which is exactly which headers go out on which hop.
 
-Time is injected too. The pacer's sleeps are recorded rather than served, so
-the 0.6s spacing and the retry backoff are asserted on directly and the suite
-still runs in milliseconds.
+Time is injected too, so the suite still runs in milliseconds. The pacer's own
+behaviour - spacing, backoff, bounded attempts - is tested directly in
+test_http.py; what is left here is what fetch_corpus does with the responses
+the pacer eventually hands back.
 """
 
 import json
@@ -20,18 +21,17 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from docintel.ingest.corpus import (
+from docintel.ingest.corpus import fetch_corpus, recheck_corpus
+from docintel.ingest.manifest import (
     Disposition,
     LastAction,
     Manifest,
     ManifestEntry,
     Reason,
     documents_dir,
-    fetch_corpus,
     load_manifest,
     manifest_path,
     oracle_dir,
-    recheck_corpus,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -195,49 +195,27 @@ def test_a_redirect_without_a_location_does_not_crash_the_run(tmp_path: Path) ->
     assert row.reason is Reason.HTTP_ERROR
 
 
-# --- rate limiting and retries --------------------------------------------
+# --- what the run does with a rate-limited endpoint ------------------------
+#
+# The pacer's own behaviour is tested in test_http.py. These two are the half
+# of those tests that is genuinely about fetch_corpus: that a recovered 429
+# leaves the corpus intact, and that an unrecovered one becomes a manifest row
+# rather than an exception.
 
 
-def test_requests_are_spaced_by_the_minimum_interval(tmp_path: Path) -> None:
-    handler = Recorder()
-
-    _, clock = run(tmp_path, handler)
-
-    # Every request after the first waits, because the injected clock only
-    # moves when we sleep, so no real time ever elapses between them.
-    assert len(clock.slept) == len(handler.requests) - 1
-    assert all(delay == pytest.approx(0.6) for delay in clock.slept)
-
-
-def test_429_is_retried_and_retry_after_is_honoured(tmp_path: Path) -> None:
+def test_a_recovered_429_does_not_cost_us_the_company(tmp_path: Path) -> None:
     handler = Recorder()
     handler.stumbles[f"/company/{COMPANY}/filing-history"] = [
         httpx.Response(429, headers={"retry-after": "7"})
     ]
 
-    manifest, clock = run(tmp_path, handler)
+    manifest, _ = run(tmp_path, handler)
 
-    assert 7.0 in clock.slept
-    # And the run carried on rather than giving up on the company.
+    # The run carried on rather than giving up on the company.
     assert any(row.disposition is Disposition.IN_CORPUS for row in manifest.entries)
 
 
-def test_429_without_retry_after_backs_off_with_jitter(tmp_path: Path) -> None:
-    handler = Recorder()
-    handler.stumbles[f"/company/{COMPANY}/filing-history"] = [
-        httpx.Response(429),
-        httpx.Response(429),
-    ]
-
-    _, clock = run(tmp_path, handler)
-
-    # rand() is pinned to 0.5, so the jitter factor is 0.5 + 0.5 = 1.0 and the
-    # delays are the bare exponential: 1s then 2s.
-    backoffs = [delay for delay in clock.slept if delay not in (0.6,)]
-    assert backoffs[:2] == [1.0, 2.0]
-
-
-def test_retries_are_bounded_and_the_failure_is_recorded(tmp_path: Path) -> None:
+def test_an_unrecovered_429_is_recorded_as_a_failure(tmp_path: Path) -> None:
     handler = Recorder()
     handler.stumbles[f"/company/{COMPANY}/filing-history"] = [httpx.Response(429)] * 10
 
@@ -246,18 +224,6 @@ def test_retries_are_bounded_and_the_failure_is_recorded(tmp_path: Path) -> None
     (row,) = manifest.entries
     assert row.disposition is Disposition.FAILED
     assert row.reason is Reason.HTTP_ERROR
-
-
-def test_an_http_date_retry_after_falls_back_to_backoff(tmp_path: Path) -> None:
-    """We do not parse the date form. A mis-parse could park the run for hours."""
-    handler = Recorder()
-    handler.stumbles[f"/company/{COMPANY}/filing-history"] = [
-        httpx.Response(429, headers={"retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"})
-    ]
-
-    _, clock = run(tmp_path, handler)
-
-    assert 1.0 in clock.slept
 
 
 # --- selection: PDF is the corpus, iXBRL is oracle only --------------------
@@ -519,7 +485,7 @@ def test_filings_beyond_the_cap_get_no_manifest_row(tmp_path: Path) -> None:
 
 def test_cap_defaults_to_two() -> None:
     """The default is a corpus-design decision, so it is pinned by a test."""
-    from docintel.ingest.corpus import DEFAULT_MAX_FILINGS_PER_COMPANY
+    from docintel.ingest.manifest import DEFAULT_MAX_FILINGS_PER_COMPANY
 
     assert DEFAULT_MAX_FILINGS_PER_COMPANY == 2
 

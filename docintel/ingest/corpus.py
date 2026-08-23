@@ -1,6 +1,9 @@
 """Fetches the filing corpus from Companies House and records what it did.
 
-Three ideas hold this module together.
+The rows this module produces, and the rules about how they are written, live
+in manifest.py; the request pacing lives in http.py. What is left here is the
+Companies House part: which endpoints to walk, which rendition to keep, and
+which candidates to turn down.
 
 The corpus is the PDF rendition, and only the PDF rendition. Companies House
 also publishes an iXBRL rendition of the same accounts, which contains the
@@ -12,17 +15,9 @@ PDF rendition is dropped from the corpus entirely rather than kept with its
 iXBRL de-tagged. De-tagging preserves a layout the extractor would never meet
 in the wild, which is a subtler version of the same cheat.
 
-The manifest records every candidate we considered, not just the ones we kept.
-A corpus you cannot interrogate is a corpus you cannot defend, and "why is that
-filing not in here" is the first question anyone asks. Rejections carry a
-`reason` from a fixed enum rather than a free-text string, so they can be
-counted.
-
-Disposition and last_action are separate fields. `disposition` describes the
-document and survives across runs; `last_action` describes what this particular
-run did. Collapsed into one field, the second run overwrites every `fetched`
-with `skipped_existing` and the manifest can no longer answer "what is in my
-corpus", which is the question every later phase asks it.
+Rejections carry a `reason` from a fixed enum rather than a free-text string,
+so they can be counted: "17 filings excluded, 15 of them no_pdf_rendition" is a
+fact about the corpus; a bag of sentences is not.
 
 TEXT LAYER: this module measures and never excludes. Some filings are scans
 with no extractable text, and they have to be found and quantified before a
@@ -35,22 +30,32 @@ open at all, which is corruption rather than a text-layer judgement.
 
 import hashlib
 import io
-import json
-import os
 import random
 import re
 import statistics
 import time
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
 from pypdf import PdfReader
+
+from docintel.ingest.http import Pacer
+from docintel.ingest.manifest import (
+    DEFAULT_MAX_FILINGS_PER_COMPANY,
+    Disposition,
+    LastAction,
+    Manifest,
+    ManifestEntry,
+    Reason,
+    TextLayer,
+    documents_dir,
+    load_manifest,
+    oracle_dir,
+    write_manifest,
+)
 
 # Eight characters: eight digits, or a two-letter jurisdiction prefix (SC, NI,
 # OC, ...) followed by six digits.
@@ -58,121 +63,6 @@ COMPANY_NUMBER = re.compile(r"^(?:\d{8}|[A-Z]{2}\d{6})$")
 
 PDF_MIME = "application/pdf"
 IXBRL_MIME = "application/xhtml+xml"
-
-# Breadth across companies beats depth within one. The same company filing the
-# same annual-report template ten years running gives ten documents and one
-# layout: an extractor that learns that template scores well on the corpus and
-# generalises to nothing. Two per company keeps a little year-on-year variation
-# without letting any one filer dominate.
-DEFAULT_MAX_FILINGS_PER_COMPANY = 2
-
-MIN_REQUEST_INTERVAL = 0.6
-MAX_ATTEMPTS = 4
-BASE_BACKOFF = 1.0
-MAX_BACKOFF = 30.0
-
-
-class Disposition(StrEnum):
-    """What this document is to us. Stable across runs."""
-
-    IN_CORPUS = "in_corpus"
-    EXCLUDED = "excluded"
-    FAILED = "failed"
-    ORACLE_ONLY = "oracle_only"
-
-
-class LastAction(StrEnum):
-    """What this run did about it. Overwritten every run.
-
-    A candidate with no bytes to download - an exclusion, or a company we could
-    not resolve - is recorded as `fetched`, because the run still spent the
-    metadata request that produced the verdict.
-    """
-
-    FETCHED = "fetched"
-    SKIPPED_EXISTING = "skipped_existing"
-    RECHECKED = "rechecked"
-
-
-class Reason(StrEnum):
-    """Why a candidate ended up with its disposition.
-
-    A closed enum rather than free text so exclusions can be counted. "17
-    filings excluded, 15 of them no_pdf_rendition" is a fact about the corpus;
-    a bag of sentences is not.
-    """
-
-    OK = "ok"
-    ORACLE_RENDITION = "oracle_rendition"
-    NO_PDF_RENDITION = "no_pdf_rendition"
-    NO_ACCOUNTS_FILINGS = "no_accounts_filings"
-    COMPANY_NOT_FOUND = "company_not_found"
-    HTTP_ERROR = "http_error"
-    NOT_A_PDF = "not_a_pdf"
-    UNREADABLE_PDF = "unreadable_pdf"
-    MISSING_ON_DISK = "missing_on_disk"
-
-
-class TextLayer(BaseModel):
-    """How much extractable text a PDF actually has."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    page_count: int = Field(ge=0)
-    chars_total: int = Field(ge=0)
-    # Median, not mean. One text-heavy cover page on an otherwise scanned
-    # filing drags a mean over any threshold you would want to set.
-    chars_per_page_median: float = Field(ge=0)
-
-
-class ManifestEntry(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    entry_id: str = Field(min_length=1)
-    company_number: str = Field(min_length=1)
-    transaction_id: str | None = None
-    filing_date: str | None = None
-    accounts_type: str | None = None
-
-    disposition: Disposition
-    last_action: LastAction
-    reason: Reason
-
-    mime: str | None = None
-    sha256: str | None = None
-    bytes: int | None = Field(default=None, ge=0)
-    text_layer: TextLayer | None = None
-    path: str | None = None
-    fetched_at: datetime | None = None
-
-
-class Manifest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    version: int = 1
-    # The parameters the corpus was built with, recorded so the manifest is
-    # self-describing. Filings beyond the cap are not candidates and get no
-    # row - writing an exclusion for every historical filing we never looked
-    # at would bury the real rejects under noise. So the cap has to be stated
-    # here, or there would be no way to tell a corpus built with a cap of 2
-    # from one where those companies only ever filed twice.
-    max_filings_per_company: int = Field(default=DEFAULT_MAX_FILINGS_PER_COMPANY, ge=1)
-    entries: list[ManifestEntry] = Field(default_factory=list)
-
-    def by_id(self) -> dict[str, ManifestEntry]:
-        return {entry.entry_id: entry for entry in self.entries}
-
-
-def manifest_path(cache_root: Path) -> Path:
-    return cache_root / "manifest.json"
-
-
-def documents_dir(cache_root: Path) -> Path:
-    return cache_root / "documents"
-
-
-def oracle_dir(cache_root: Path) -> Path:
-    return cache_root / "oracle"
 
 
 def read_company_numbers(path: Path) -> list[str]:
@@ -196,36 +86,6 @@ def read_company_numbers(path: Path) -> list[str]:
     return numbers
 
 
-def load_manifest(cache_root: Path) -> Manifest:
-    path = manifest_path(cache_root)
-    if not path.exists():
-        return Manifest()
-    return Manifest.model_validate_json(path.read_text(encoding="utf-8"))
-
-
-def write_manifest(manifest: Manifest, cache_root: Path) -> Path:
-    """Writes the manifest atomically, with a stable byte-for-byte layout.
-
-    Sorted entries and sorted keys mean a run that changed nothing produces an
-    identical file, so a diff on the manifest shows corpus changes rather than
-    dictionary ordering noise.
-    """
-    ordered = manifest.model_copy(
-        update={"entries": sorted(manifest.entries, key=lambda entry: entry.entry_id)}
-    )
-    payload = json.dumps(ordered.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
-
-    path = manifest_path(cache_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Written to a sibling and renamed: an interrupted run leaves the previous
-    # manifest intact rather than a half-written one, and the corpus on disk
-    # stays describable.
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(payload, encoding="utf-8")
-    os.replace(tmp, path)
-    return path
-
-
 def analyse_pdf(data: bytes) -> TextLayer:
     """Measures the text layer. Raises if the bytes are not a readable PDF."""
     reader = PdfReader(io.BytesIO(data))
@@ -237,74 +97,6 @@ def analyse_pdf(data: bytes) -> TextLayer:
         chars_total=sum(per_page),
         chars_per_page_median=float(statistics.median(per_page)),
     )
-
-
-@dataclass
-class _Pacer:
-    """Serialises requests: a minimum gap, then retries with bounded backoff.
-
-    The clock, the sleep and the jitter are injected so the tests exercise the
-    real retry path at zero wall-clock cost. A test that actually slept would
-    either be slow or would quietly stop testing the backoff.
-    """
-
-    sleep: Callable[[float], None]
-    monotonic: Callable[[], float]
-    rand: Callable[[], float]
-    min_interval: float = MIN_REQUEST_INTERVAL
-    max_attempts: int = MAX_ATTEMPTS
-    last_request_at: float | None = None
-
-    def get(
-        self,
-        client: httpx.Client,
-        url: str,
-        *,
-        headers: dict[str, str] | None = None,
-        authed: bool = True,
-    ) -> httpx.Response:
-        last: httpx.Response | None = None
-        for attempt in range(self.max_attempts):
-            self._wait_turn()
-            request = client.build_request("GET", url, headers=headers)
-            # auth=None disables the client-level credential for this request.
-            # See _download for why the second hop of a redirect must not carry
-            # it.
-            response = client.send(request) if authed else client.send(request, auth=None)
-            self.last_request_at = self.monotonic()
-
-            if response.status_code != 429 and response.status_code < 500:
-                return response
-            last = response
-            if attempt == self.max_attempts - 1:
-                break
-            self.sleep(self._retry_delay(response, attempt))
-
-        assert last is not None
-        return last
-
-    def _wait_turn(self) -> None:
-        if self.last_request_at is None:
-            return
-        elapsed = self.monotonic() - self.last_request_at
-        if elapsed < self.min_interval:
-            self.sleep(self.min_interval - elapsed)
-
-    def _retry_delay(self, response: httpx.Response, attempt: int) -> float:
-        header = response.headers.get("retry-after")
-        if header is not None:
-            try:
-                # Retry-After may also be an HTTP-date. We do not parse that
-                # form: falling through to backoff is safe, whereas a
-                # mis-parsed date could produce a delay of hours.
-                return max(0.0, float(int(header)))
-            except ValueError:
-                pass
-        # Exponential, jittered so that a batch of retries does not resynchronise
-        # into a thundering herd, and capped so one bad response cannot park the
-        # run for an unbounded time.
-        backoff = min(BASE_BACKOFF * (2.0**attempt), MAX_BACKOFF)
-        return backoff * (0.5 + self.rand())
 
 
 def _utc_now() -> datetime:
@@ -319,7 +111,7 @@ def _relative(path: Path, cache_root: Path) -> str:
     return path.relative_to(cache_root).as_posix()
 
 
-def _download(pacer: _Pacer, client: httpx.Client, url: str, accept: str) -> httpx.Response:
+def _download(pacer: Pacer, client: httpx.Client, url: str, accept: str) -> httpx.Response:
     """Fetches a document, handling the redirect to the signed URL ourselves.
 
     UNVERIFIED AGAINST THE LIVE API. The document endpoint answers 302 with a
@@ -416,7 +208,7 @@ def fetch_corpus(
     a corpus you cannot describe the parameters of is a corpus you cannot
     reproduce.
     """
-    pacer = _Pacer(sleep=sleep, monotonic=monotonic, rand=rand)
+    pacer = Pacer(sleep=sleep, monotonic=monotonic, rand=rand)
     previous = load_manifest(cache_root).by_id()
     entries: list[ManifestEntry] = []
 
@@ -439,7 +231,7 @@ def fetch_corpus(
 
 
 def _fetch_company(
-    pacer: _Pacer,
+    pacer: Pacer,
     client: httpx.Client,
     *,
     cache_root: Path,
@@ -513,7 +305,7 @@ def _barren(company_number: str, reason: Reason) -> ManifestEntry:
 
 
 def _fetch_filing(
-    pacer: _Pacer,
+    pacer: Pacer,
     client: httpx.Client,
     *,
     cache_root: Path,
@@ -596,7 +388,7 @@ def _filing_failure(
 
 
 def _fetch_pdf(
-    pacer: _Pacer,
+    pacer: Pacer,
     client: httpx.Client,
     *,
     cache_root: Path,
@@ -646,7 +438,7 @@ def _fetch_pdf(
 
 
 def _fetch_oracle(
-    pacer: _Pacer,
+    pacer: Pacer,
     client: httpx.Client,
     *,
     cache_root: Path,

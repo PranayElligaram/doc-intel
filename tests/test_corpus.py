@@ -1,6 +1,7 @@
 """Unit tests for the pieces of corpus.py that need no HTTP at all.
 
-The full fetch flow lives in test_fetch_corpus.py.
+The full fetch flow lives in test_fetch_corpus.py. The manifest's own rules -
+sorted, atomic, byte-stable writes - live in test_manifest.py.
 """
 
 from datetime import UTC, datetime
@@ -10,19 +11,19 @@ import pytest
 from pypdf.errors import PyPdfError
 
 from docintel.ingest.corpus import (
+    analyse_pdf,
+    read_company_numbers,
+    recheck_corpus,
+    text_layer_report,
+)
+from docintel.ingest.manifest import (
     Disposition,
     LastAction,
     Manifest,
     ManifestEntry,
     Reason,
-    analyse_pdf,
     documents_dir,
-    load_manifest,
-    manifest_path,
     oracle_dir,
-    read_company_numbers,
-    recheck_corpus,
-    text_layer_report,
     write_manifest,
 )
 
@@ -121,7 +122,7 @@ def test_the_committed_corpus_definition_parses() -> None:
     assert len(numbers) == len(set(numbers))
 
 
-# --- manifest -------------------------------------------------------------
+# --- shared fixtures for the tests below ----------------------------------
 
 
 def entry(entry_id: str, **overrides: object) -> ManifestEntry:
@@ -134,51 +135,6 @@ def entry(entry_id: str, **overrides: object) -> ManifestEntry:
     )
     base.update(overrides)
     return ManifestEntry.model_validate(base)
-
-
-def test_manifest_write_is_byte_identical_for_the_same_content(tmp_path: Path) -> None:
-    manifest = Manifest(entries=[entry("00445790/B/pdf"), entry("00445790/A/pdf")])
-
-    write_manifest(manifest, tmp_path)
-    first = manifest_path(tmp_path).read_bytes()
-    write_manifest(manifest, tmp_path)
-    second = manifest_path(tmp_path).read_bytes()
-
-    assert first == second
-
-
-def test_manifest_entries_are_sorted_regardless_of_insertion_order(tmp_path: Path) -> None:
-    """So a diff on the manifest shows corpus changes, not dict ordering."""
-    forwards = Manifest(entries=[entry("00445790/A/pdf"), entry("00445790/B/pdf")])
-    backwards = Manifest(entries=[entry("00445790/B/pdf"), entry("00445790/A/pdf")])
-
-    write_manifest(forwards, tmp_path)
-    one = manifest_path(tmp_path).read_bytes()
-    write_manifest(backwards, tmp_path)
-    two = manifest_path(tmp_path).read_bytes()
-
-    assert one == two
-
-
-def test_manifest_round_trips(tmp_path: Path) -> None:
-    fetched_at = datetime(2026, 8, 22, 9, 30, tzinfo=UTC)
-    manifest = Manifest(entries=[entry("00445790/A/pdf", fetched_at=fetched_at, bytes=1539)])
-
-    write_manifest(manifest, tmp_path)
-
-    reloaded = load_manifest(tmp_path)
-    assert reloaded.entries[0].fetched_at == fetched_at
-    assert reloaded.entries[0].bytes == 1539
-
-
-def test_missing_manifest_loads_as_empty(tmp_path: Path) -> None:
-    assert load_manifest(tmp_path).entries == []
-
-
-def test_atomic_write_leaves_no_temp_file(tmp_path: Path) -> None:
-    write_manifest(Manifest(entries=[entry("00445790/A/pdf")]), tmp_path)
-
-    assert [p.name for p in tmp_path.iterdir() if p.suffix == ".tmp"] == []
 
 
 # --- disposition and last_action are separate -----------------------------

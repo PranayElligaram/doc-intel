@@ -1,4 +1,4 @@
-"""CLI wrapper around docintel.ingest.corpus.
+"""CLI wrapper around docintel.ingest.
 
 Deliberately thin. Everything worth testing lives in the module; this file is
 argparse, credentials and printing, so that the test suite never has to drive a
@@ -14,13 +14,12 @@ import httpx
 from dotenv import load_dotenv
 
 from docintel.ingest.corpus import (
-    DEFAULT_MAX_FILINGS_PER_COMPANY,
     fetch_corpus,
-    load_manifest,
     read_company_numbers,
     recheck_corpus,
     text_layer_report,
 )
+from docintel.ingest.manifest import DEFAULT_MAX_FILINGS_PER_COMPANY, load_manifest
 
 API_BASE = "https://api.company-information.service.gov.uk"
 
