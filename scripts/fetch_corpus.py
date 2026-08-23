@@ -1,8 +1,8 @@
 """CLI wrapper around docintel.ingest.
 
 Deliberately thin. Everything worth testing lives in the module; this file is
-argparse, credentials and printing, so that the test suite never has to drive a
-command line to reach the logic.
+argparse, the contact header and printing, so that the test suite never has to
+drive a command line to reach the logic.
 """
 
 import argparse
@@ -13,31 +13,30 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
-from docintel.ingest.corpus import (
+from docintel.ingest.edgar import (
+    corpus_report,
+    edgar_headers,
     fetch_corpus,
-    read_company_numbers,
+    read_ciks,
     recheck_corpus,
-    text_layer_report,
 )
 from docintel.ingest.manifest import DEFAULT_MAX_FILINGS_PER_COMPANY, load_manifest
 
-API_BASE = "https://api.company-information.service.gov.uk"
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_COMPANIES = REPO_ROOT / "data" / "companies.txt"
+DEFAULT_CIKS = REPO_ROOT / "data" / "ciks.txt"
 DEFAULT_CACHE_ROOT = REPO_ROOT / "data" / "cache"
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--companies", type=Path, default=DEFAULT_COMPANIES)
+    parser.add_argument("--ciks", type=Path, default=DEFAULT_CIKS)
     parser.add_argument("--cache-root", type=Path, default=DEFAULT_CACHE_ROOT)
     parser.add_argument(
         "--max-filings-per-company",
         type=int,
         default=DEFAULT_MAX_FILINGS_PER_COMPANY,
         help=(
-            "cap on how many of a company's most recent accounts filings become "
+            "cap on how many of a company's most recent annual reports become "
             "candidates. Breadth across companies beats depth within one: the same "
             "filer's template repeated is one layout, not many documents. "
             f"Default {DEFAULT_MAX_FILINGS_PER_COMPANY}."
@@ -51,54 +50,55 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--recheck",
         action="store_true",
-        help="re-measure the bytes already on disk. Makes no network calls.",
+        help="re-derive text from the bytes already on disk. Makes no network calls.",
     )
     parser.add_argument(
         "--report",
         action="store_true",
-        help="print the measured text-layer distribution and exit",
+        help="print the derived-text size distribution and markup ratio, then exit",
     )
     args = parser.parse_args(argv)
 
     if args.report:
-        print(text_layer_report(load_manifest(args.cache_root)))
+        print(corpus_report(load_manifest(args.cache_root)))
         return 0
 
     if args.recheck:
-        manifest = recheck_corpus(args.cache_root)
-        print(text_layer_report(manifest))
+        print(corpus_report(recheck_corpus(args.cache_root)))
         return 0
 
     load_dotenv()
-    api_key = os.environ.get("COMPANIES_HOUSE_API_KEY")
-    if not api_key:
+    user_agent = os.environ.get("SEC_USER_AGENT", "").strip()
+    if not user_agent:
         print(
-            "COMPANIES_HOUSE_API_KEY is not set. Copy .env.example to .env and put your key in it.",
+            "SEC_USER_AGENT is not set. Copy .env.example to .env and put your "
+            "contact string in it. It is not a secret.",
+            file=sys.stderr,
+        )
+        return 2
+    if "@" not in user_agent:
+        # Caught here because EDGAR's own answer is a 403 carrying an
+        # "Undeclared Automated Tool" HTML page, which is a confusing way to
+        # find out your User-Agent was the wrong shape.
+        print(
+            f"SEC_USER_AGENT is {user_agent!r}, which EDGAR will reject. It must be a "
+            'contact string of the form "Name email@domain.com".',
             file=sys.stderr,
         )
         return 2
 
-    company_numbers = read_company_numbers(args.companies)
+    ciks = read_ciks(args.ciks)
 
-    # follow_redirects=False is load-bearing, not a default we inherited. See
-    # _download in docintel/ingest/corpus.py: the second hop of the document
-    # redirect must not carry the Authorization header, and httpx's own
-    # redirect following would forward it.
-    with httpx.Client(
-        base_url=API_BASE,
-        auth=httpx.BasicAuth(api_key, ""),
-        follow_redirects=False,
-        timeout=60.0,
-    ) as client:
+    with httpx.Client(headers=edgar_headers(user_agent), timeout=60.0) as client:
         manifest = fetch_corpus(
             client,
             cache_root=args.cache_root,
-            company_numbers=company_numbers,
+            ciks=ciks,
             max_filings_per_company=args.max_filings_per_company,
             force=args.force,
         )
 
-    print(text_layer_report(manifest))
+    print(corpus_report(manifest))
     return 0
 
 

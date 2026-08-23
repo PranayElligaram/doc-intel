@@ -81,12 +81,14 @@ class Money(BaseModel):
     under a £'000s heading is stored as amount=4200000, scale=THOUSANDS. The
     printed form itself lives on the Citation, not here.
 
-    Currency is not modelled: every amount is assumed to be GBP, because the
-    corpus is UK company filings. This is a scope decision, not an oversight,
-    and it has a known failure mode - a filing reporting in EUR or USD would be
-    stored as though it were pounds and silently mis-scored against the gold
-    set, with nothing in the schema to flag it. If the corpus ever admits a
-    non-GBP filer, this needs a currency field before that document is labelled.
+    Currency is not modelled: every amount is currently assumed to be GBP. That
+    assumption is now WRONG for the corpus, which is US SEC filings reporting in
+    dollars - a figure here is stored as though it were pounds, and would be
+    silently mis-scored against the gold set with nothing in the schema to flag
+    it. A currency field has to land before the first gold label is written.
+    See docs/labelling-policy.md. It is deliberately not being added in the same
+    change as the corpus swap, because it alters the type-level guarantees and
+    deserves reviewing on its own.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -174,8 +176,9 @@ class CompanyAccounts(BaseModel):
 class DocumentExtraction(BaseModel):
     """One extraction run against one cached document.
 
-    `document_id` is the Companies House document id, which is what ties this
-    record back to an entry in the corpus manifest and to a gold label.
+    `document_id` is the manifest's `entry_id` for the document - for the EDGAR
+    corpus, "{cik}/{accession number}". It is what ties this record back to an
+    entry in the corpus manifest and to a gold label.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -5,13 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "doc-intel"
 version = "0.1.0"
-description = "Structured extraction from UK company filings, with grounding and abstention evaluation."
+description = "Structured extraction from SEC filings, with grounding and abstention evaluation."
 requires-python = ">=3.13"
 
 dependencies = [
     "httpx==0.28.1",
     "pydantic==2.13.4",
-    "pypdf==6.16.1",
     "python-dotenv==1.2.3",
 ]
 

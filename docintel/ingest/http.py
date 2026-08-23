@@ -1,9 +1,14 @@
 """Polite HTTP for the ingest fetchers: one request at a time, bounded retries.
 
-Split out of corpus.py because it is the one piece of that module with nothing
-Companies House about it. Any API we fetch a corpus from wants the same
+Split out of the fetcher because it is the one piece of it with nothing
+source-specific about it. Any API we fetch a corpus from wants the same
 treatment - a minimum gap between requests, backoff on 429 and 5xx, and a cap
 on how long one bad response can park a run.
+
+The minimum interval is 0.6s, which is well inside EDGAR's published ceiling of
+10 requests per second. The limit is not the reason for the gap: a corpus fetch
+is a background job with no deadline, and there is no benefit to being anywhere
+near a rate limit that, if hit, gets your IP blocked.
 """
 
 from collections.abc import Callable
@@ -39,16 +44,11 @@ class Pacer:
         url: str,
         *,
         headers: dict[str, str] | None = None,
-        authed: bool = True,
     ) -> httpx.Response:
         last: httpx.Response | None = None
         for attempt in range(self.max_attempts):
             self._wait_turn()
-            request = client.build_request("GET", url, headers=headers)
-            # auth=None disables the client-level credential for this request.
-            # See _download for why the second hop of a redirect must not carry
-            # it.
-            response = client.send(request) if authed else client.send(request, auth=None)
+            response = client.send(client.build_request("GET", url, headers=headers))
             self.last_request_at = self.monotonic()
 
             if response.status_code != 429 and response.status_code < 500:

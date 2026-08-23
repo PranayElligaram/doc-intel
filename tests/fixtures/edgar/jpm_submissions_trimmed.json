@@ -1,0 +1,89 @@
+{
+ "cik": "0000019617",
+ "entityType": "operating",
+ "sic": "6021",
+ "sicDescription": "National Commercial Banks",
+ "name": "JPMORGAN CHASE & CO",
+ "tickers": [
+  "JPM",
+  "JPM-PC",
+  "AMJB",
+  "JPM-PD",
+  "JPM-PJ",
+  "JPM-PK",
+  "JPM-PL",
+  "JPM-PM",
+  "VYLD"
+ ],
+ "exchanges": [
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0001918704-26-024502",
+    "0001918704-26-024500",
+    "0001213900-26-092667",
+    "0001628280-26-008131"
+   ],
+   "filingDate": [
+    "2026-08-21",
+    "2026-08-21",
+    "2026-08-21",
+    "2026-02-13"
+   ],
+   "reportDate": [
+    "",
+    "",
+    "",
+    "2025-12-31"
+   ],
+   "form": [
+    "424B2",
+    "424B2",
+    "424B2",
+    "10-K"
+   ],
+   "primaryDocument": [
+    "form424b2.htm",
+    "form424b2.htm",
+    "ea0303011-01_424b2.htm",
+    "jpm-20251231.htm"
+   ],
+   "primaryDocDescription": [
+    "PRELIMINARY PRICING SUPPLEMENT",
+    "PRELIMINARY PRICING SUPPLEMENT",
+    "PRICING SUPPLEMENT",
+    "10-K"
+   ],
+   "isInlineXBRL": [
+    0,
+    0,
+    1,
+    1
+   ]
+  },
+  "files": [
+   {
+    "name": "CIK0000019617-submissions-001.json",
+    "filingCount": 2050,
+    "filingFrom": "2025-07-21",
+    "filingTo": "2025-08-20"
+   },
+   {
+    "name": "CIK0000019617-submissions-016.json",
+    "filingCount": 2000,
+    "filingFrom": "2024-01-19",
+    "filingTo": "2024-02-26"
+   }
+  ]
+ }
+}

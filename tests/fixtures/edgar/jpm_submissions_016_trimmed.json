@@ -1,0 +1,44 @@
+{
+ "accessionNumber": [
+  "0001213900-24-017597",
+  "0001213900-24-017593",
+  "0001213900-24-017587",
+  "0000019617-24-000225"
+ ],
+ "filingDate": [
+  "2024-02-27",
+  "2024-02-27",
+  "2024-02-27",
+  "2024-02-16"
+ ],
+ "reportDate": [
+  "",
+  "",
+  "",
+  "2023-12-31"
+ ],
+ "form": [
+  "424B2",
+  "424B2",
+  "424B2",
+  "10-K"
+ ],
+ "primaryDocument": [
+  "ea170668_424b2.htm",
+  "ea170664_424b2.htm",
+  "ea170674_424b2.htm",
+  "jpm-20231231.htm"
+ ],
+ "primaryDocDescription": [
+  "PRELIMINARY PRICING SUPPLEMENT",
+  "PRICING SUPPLEMENT",
+  "PRICING SUPPLEMENT",
+  "10-K"
+ ],
+ "isInlineXBRL": [
+  0,
+  0,
+  0,
+  1
+ ]
+}

@@ -1,0 +1,78 @@
+# The corpus definition. One SEC EDGAR CIK per line; everything after a # is a
+# comment. Leading zeros are optional - the fetcher pads to ten digits.
+#
+# This file is committed on purpose. The alternative - searching the API at
+# fetch time - gives a different corpus to every person who runs it on every
+# day they run it, and a corpus that cannot be reproduced cannot support a
+# number in the README.
+#
+# WHAT WAS VERIFIED, AND BY WHAT
+# Every CIK below was resolved through https://www.sec.gov/files/company_tickers.json
+# and then checked against its own submissions JSON on 2026-08-23. For all 18:
+# the CIK resolves to the named company, and at least two 10-K filings are
+# reachable with a non-empty primaryDocument. The 10-K counts in the tier notes
+# below are counts from that check, not estimates.
+#
+# What is NOT verified is the tier label itself. "Mid-cap" and "pre-revenue"
+# are my editorial judgement about what each filer contributes to the corpus.
+# The first fetch will not confirm or refute them; only reading the filings
+# will.
+#
+# SELECTION RATIONALE
+# A representative draw from EDGAR is mostly small filers and shell companies,
+# and a corpus of those would test almost nothing. So the list is stratified
+# across the properties that actually make extraction hard - document size,
+# table density, filename convention, and whether a field is genuinely absent.
+#
+# One trap this list is built to include on purpose: the large banks. Their
+# 10-K does not appear in the submissions JSON's `filings.recent` block at all,
+# because they file thousands of pricing supplements a year and push their own
+# annual report out of that window. Any fetcher that reads only `recent` gets
+# one 10-K from them instead of two and never notices. See the overflow walk in
+# docintel/ingest/edgar.py.
+
+# --- mega-cap tech ---------------------------------------------------------
+# Large inline-XBRL filings from the major filing platforms, the densest
+# tagging in the corpus. Apple is also the filename-convention case: its own
+# 10-Ks use aapl-20250927.htm, a10-k20189292018.htm and d17062d10k.htm.
+0000320193   # Apple Inc.            11 10-Ks in recent
+0000789019   # Microsoft Corp         7 10-Ks in recent
+0001045810   # NVIDIA Corp            6 10-Ks in recent
+
+# --- large financials: the overflow-walk tier ------------------------------
+# Exactly ONE 10-K each in filings.recent, against 69, 38 and 20 overflow
+# files. The cap of two is unreachable for these three without following the
+# overflow. Also the densest tables in the corpus.
+0000019617   # JPMorgan Chase & Co    1 10-K in recent, 69 overflow files
+0000886982   # Goldman Sachs Group    1 10-K in recent, 38 overflow files
+0000070858   # Bank of America Corp   1 10-K in recent, 20 overflow files
+
+# --- industrial and consumer -----------------------------------------------
+# Long narrative Item 1 and Item 1A, plainer typesetting, non-calendar fiscal
+# years in two of the three.
+0000018230   # Caterpillar Inc        7 10-Ks in recent
+0000080424   # Procter & Gamble Co    5 10-Ks in recent, June year end
+0000104169   # Walmart Inc.           3 10-Ks in recent, January year end
+
+# --- energy, utility, REIT -------------------------------------------------
+# Different statement layouts and segment structures from everything above.
+# Note the CIK: the XOM ticker now resolves to 0002115436 "ExxonMobil Holdings
+# Corp", which has filed no 10-K. The operating filer is the one below.
+0000034088   # Exxon Mobil Corp       7 10-Ks in recent
+0000753308   # NextEra Energy Inc     7 10-Ks in recent
+0001063761   # Simon Property Group  12 10-Ks in recent
+
+# --- mid-cap ---------------------------------------------------------------
+# Shorter filings with less bespoke design. The counterweight to a corpus that
+# would otherwise be entirely mega-cap annual reports.
+0001370637   # Etsy Inc               8 10-Ks in recent
+0001345016   # Yelp Inc               8 10-Ks in recent
+0001334036   # Crocs, Inc.           15 10-Ks in recent
+0001517375   # Sprout Social, Inc.    7 10-Ks in recent
+
+# --- pre-revenue biotech: the abstention tier ------------------------------
+# Clinical-stage filers whose income statement has no product revenue line at
+# all. This is where genuine not_stated cases should come from - a field the
+# document truthfully does not state, rather than one a model failed to find.
+0001649094   # Vaxcyte, Inc.          6 10-Ks in recent
+0001714899   # Denali Therapeutics    9 10-Ks in recent

@@ -1,16 +1,26 @@
 """What a fetched corpus is made of, and how it is written to disk.
 
-Nothing here knows where the documents came from. Companies House, EDGAR or a
+Nothing here knows where the documents came from. EDGAR, Companies House or a
 directory someone dropped on the disk all produce the same rows: a disposition,
 what the last run did about it, a reason drawn from a closed enum, and enough
 bytes-level detail to re-derive the rest. The source-specific fetching lives in
-its own module and imports this one.
+its own module and imports this one. That is why the identifier fields are
+named `company_id` and `document_id` rather than `cik` and `accession_number` -
+the EDGAR fetcher fills them with exactly those, and a later source would fill
+them with its own.
 
 Disposition and last_action are separate fields. `disposition` describes the
 document and survives across runs; `last_action` describes what this particular
 run did. Collapsed into one field, the second run overwrites every `fetched`
 with `skipped_existing` and the manifest can no longer answer "what is in my
 corpus", which is the question every later phase asks it.
+
+EVERY DOCUMENT IS TWO ARTEFACTS. The raw bytes as fetched, and the text derived
+from them. Both are hashed, because they answer different questions: raw_sha256
+says whether the source changed under us, text_sha256 says whether our
+derivation of it changed. `derivation_version` records which version of
+`derive_text` produced the text, and it is the field that tells a stored
+citation offset apart from one made against a different derivation.
 
 The manifest records every candidate that was considered, not just the ones
 that were kept. A corpus you cannot interrogate is a corpus you cannot defend,
@@ -59,51 +69,56 @@ class Reason(StrEnum):
     """Why a candidate ended up with its disposition.
 
     A closed enum rather than free text so exclusions can be counted. "17
-    filings excluded, 15 of them no_pdf_rendition" is a fact about the corpus;
-    a bag of sentences is not.
+    filings excluded, 15 of them no_primary_document" is a fact about the
+    corpus; a bag of sentences is not.
     """
 
     OK = "ok"
-    ORACLE_RENDITION = "oracle_rendition"
-    NO_PDF_RENDITION = "no_pdf_rendition"
-    NO_ACCOUNTS_FILINGS = "no_accounts_filings"
+    ORACLE_COMPANYFACTS = "oracle_companyfacts"
+    NO_PRIMARY_DOCUMENT = "no_primary_document"
+    NO_MATCHING_FILINGS = "no_matching_filings"
     COMPANY_NOT_FOUND = "company_not_found"
     HTTP_ERROR = "http_error"
-    NOT_A_PDF = "not_a_pdf"
-    UNREADABLE_PDF = "unreadable_pdf"
+    NOT_HTML = "not_html"
+    # A document that derives to nothing is a defect, not a measurement. See
+    # the note on EMPTY_DERIVATION in docintel/ingest/edgar.py.
+    EMPTY_DERIVATION = "empty_derivation"
     MISSING_ON_DISK = "missing_on_disk"
-
-
-class TextLayer(BaseModel):
-    """How much extractable text a PDF actually has."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    page_count: int = Field(ge=0)
-    chars_total: int = Field(ge=0)
-    # Median, not mean. One text-heavy cover page on an otherwise scanned
-    # filing drags a mean over any threshold you would want to set.
-    chars_per_page_median: float = Field(ge=0)
 
 
 class ManifestEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     entry_id: str = Field(min_length=1)
-    company_number: str = Field(min_length=1)
-    transaction_id: str | None = None
+    # The CIK, for the EDGAR fetcher. See the module docstring on why these two
+    # are named for their role rather than for one source's vocabulary.
+    company_id: str = Field(min_length=1)
+    # The accession number, for the EDGAR fetcher.
+    document_id: str | None = None
     filing_date: str | None = None
-    accounts_type: str | None = None
+    # The period the filing reports on, as the source states it. Kept as the
+    # source's own string rather than parsed: this is provenance, and Phase 2
+    # labels the period from the document text, not from here.
+    report_date: str | None = None
+    doc_type: str | None = None
 
     disposition: Disposition
     last_action: LastAction
     reason: Reason
 
     mime: str | None = None
-    sha256: str | None = None
+
+    # The bytes as fetched.
+    raw_sha256: str | None = None
     bytes: int | None = Field(default=None, ge=0)
-    text_layer: TextLayer | None = None
-    path: str | None = None
+    raw_path: str | None = None
+
+    # The text derived from them. Absent on rows that never got that far.
+    text_sha256: str | None = None
+    text_chars: int | None = Field(default=None, ge=0)
+    text_path: str | None = None
+    derivation_version: int | None = Field(default=None, ge=1)
+
     fetched_at: datetime | None = None
 
 
@@ -129,10 +144,21 @@ def manifest_path(cache_root: Path) -> Path:
 
 
 def documents_dir(cache_root: Path) -> Path:
+    """The bytes as fetched. This and text/ are what an extractor may read."""
     return cache_root / "documents"
 
 
+def text_dir(cache_root: Path) -> Path:
+    return cache_root / "text"
+
+
 def oracle_dir(cache_root: Path) -> Path:
+    """The answer key. Nothing in the extraction path may read from here.
+
+    Enforced by tests/test_oracle_guard.py, which walks the source of every
+    module under docintel/ and fails if this function is called anywhere
+    outside a short allow-list of fetch-and-store functions.
+    """
     return cache_root / "oracle"
 
 

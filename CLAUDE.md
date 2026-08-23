@@ -17,6 +17,10 @@ measures grounding and abstention, not just accuracy.
 - Every extracted field carries a citation: chunk id + character span.
 - Keep it flat. No utils.py, no service layer, no DI container.
 
+## Commits
+- Never add `Co-Authored-By` or `Claude-Session` trailers to a suggested commit
+  message. The message ends at the prose.
+
 ## Honesty
 - Never fabricate results, datasets or benchmarks.
 - Every number in the README must come from `eval/run_eval.py` and be re-runnable.

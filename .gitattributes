@@ -1,0 +1,36 @@
+# Line endings are a policy, not a per-file accident.
+#
+# Development happens on Windows and CI runs on both ubuntu-latest and
+# windows-latest. Without this, git normalises each file according to whatever
+# it guessed the first time it saw it, and a suite that compares derived text
+# byte-for-byte starts failing on one runner and not the other for reasons that
+# have nothing to do with the code.
+#
+# LF in the repository, always. Checkout is left to the platform default, which
+# on Windows with core.autocrlf=true gives CRLF in the working tree and LF in
+# the object store - fine, because nothing here reads its own source bytes.
+
+* text=auto eol=lf
+
+# Spelled out for the formats this repo actually holds, so the intent survives
+# someone changing the line above.
+*.py    text eol=lf
+*.json  text eol=lf
+*.htm   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+
+# Binary fixtures. There are none right now - the scanned-PDF fixtures went
+# with the Companies House fetcher in Phase 1d-ii - but a PDF or a PNG that
+# gets line-ending normalisation applied to it is corrupted silently, and the
+# moment to write that rule down is before the first one lands, not after.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.zip   binary
+*.gz    binary

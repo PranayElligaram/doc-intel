@@ -23,7 +23,7 @@ from docintel.ingest.manifest import (
 def entry(entry_id: str, **overrides: object) -> ManifestEntry:
     base: dict[str, object] = dict(
         entry_id=entry_id,
-        company_number=entry_id.split("/")[0],
+        company_id=entry_id.split("/")[0],
         disposition=Disposition.IN_CORPUS,
         last_action=LastAction.FETCHED,
         reason=Reason.OK,
@@ -33,7 +33,9 @@ def entry(entry_id: str, **overrides: object) -> ManifestEntry:
 
 
 def test_manifest_write_is_byte_identical_for_the_same_content(tmp_path: Path) -> None:
-    manifest = Manifest(entries=[entry("00445790/B/pdf"), entry("00445790/A/pdf")])
+    manifest = Manifest(
+        entries=[entry("0000320193/0000320193-24-000123"), entry("0000320193/0000320193-25-000079")]
+    )
 
     write_manifest(manifest, tmp_path)
     first = manifest_path(tmp_path).read_bytes()
@@ -45,8 +47,12 @@ def test_manifest_write_is_byte_identical_for_the_same_content(tmp_path: Path) -
 
 def test_manifest_entries_are_sorted_regardless_of_insertion_order(tmp_path: Path) -> None:
     """So a diff on the manifest shows corpus changes, not dict ordering."""
-    forwards = Manifest(entries=[entry("00445790/A/pdf"), entry("00445790/B/pdf")])
-    backwards = Manifest(entries=[entry("00445790/B/pdf"), entry("00445790/A/pdf")])
+    forwards = Manifest(
+        entries=[entry("0000320193/0000320193-25-000079"), entry("0000320193/0000320193-24-000123")]
+    )
+    backwards = Manifest(
+        entries=[entry("0000320193/0000320193-24-000123"), entry("0000320193/0000320193-25-000079")]
+    )
 
     write_manifest(forwards, tmp_path)
     one = manifest_path(tmp_path).read_bytes()
@@ -58,7 +64,9 @@ def test_manifest_entries_are_sorted_regardless_of_insertion_order(tmp_path: Pat
 
 def test_manifest_round_trips(tmp_path: Path) -> None:
     fetched_at = datetime(2026, 8, 22, 9, 30, tzinfo=UTC)
-    manifest = Manifest(entries=[entry("00445790/A/pdf", fetched_at=fetched_at, bytes=1539)])
+    manifest = Manifest(
+        entries=[entry("0000320193/0000320193-25-000079", fetched_at=fetched_at, bytes=1539)]
+    )
 
     write_manifest(manifest, tmp_path)
 
@@ -72,6 +80,6 @@ def test_missing_manifest_loads_as_empty(tmp_path: Path) -> None:
 
 
 def test_atomic_write_leaves_no_temp_file(tmp_path: Path) -> None:
-    write_manifest(Manifest(entries=[entry("00445790/A/pdf")]), tmp_path)
+    write_manifest(Manifest(entries=[entry("0000320193/0000320193-25-000079")]), tmp_path)
 
     assert [p.name for p in tmp_path.iterdir() if p.suffix == ".tmp"] == []

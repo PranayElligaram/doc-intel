@@ -1,0 +1,37 @@
+{
+ "accessionNumber": [
+  "0001839882-25-046042",
+  "0001213900-25-079391",
+  "0001213900-25-079383"
+ ],
+ "filingDate": [
+  "2025-08-21",
+  "2025-08-21",
+  "2025-08-21"
+ ],
+ "reportDate": [
+  "",
+  "",
+  ""
+ ],
+ "form": [
+  "424B2",
+  "424B2",
+  "424B2"
+ ],
+ "primaryDocument": [
+  "jpm_424b2-25623.htm",
+  "ea0254226-01_424b2.htm",
+  "ea0254174-01_424b2.htm"
+ ],
+ "primaryDocDescription": [
+  "PRICING SUPPLEMENT",
+  "PRELIMINARY PRICING SUPPLEMENT",
+  "PRELIMINARY PRICING SUPPLEMENT"
+ ],
+ "isInlineXBRL": [
+  1,
+  0,
+  0
+ ]
+}

@@ -11,7 +11,8 @@ the HTML *is* the human-readable document and the tags are invisible metadata
 laid on top of it. Remove the metadata and what remains is exactly what a
 person sees. That was not true of the Companies House iXBRL rendition, whose
 layout no reader ever met, which is why that one was quarantined rather than
-de-tagged.
+de-tagged. That corpus is gone - docs/corpus-selection.md has the story - but
+the distinction is the whole justification for this module and outlives it.
 
 But it has to be enforced rather than assumed, so the rule is a closed list and
 `tests/test_html_text.py` asserts that nothing XBRL survives into corpus text.

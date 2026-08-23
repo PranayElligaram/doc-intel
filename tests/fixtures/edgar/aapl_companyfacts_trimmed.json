@@ -1,0 +1,67 @@
+{
+ "cik": 320193,
+ "entityName": "Apple Inc.",
+ "facts": {
+  "dei": {
+   "EntityCommonStockSharesOutstanding": {
+    "label": "Entity Common Stock, Shares Outstanding",
+    "description": "Indicate number of shares or other units outstanding of each of registrant's classes of capital or common stock or other ownership interests, if and as stated on cover of related periodic report. Where multiple classes or units exist define each class/interest by adding class of stock items such as Common Class A [Member], Common Class B [Member] or Partnership Interest [Member] onto the Instrument [Domain] of the Entity Listings, Instrument.",
+    "units": {
+     "shares": [
+      {
+       "end": "2009-06-27",
+       "val": 895816758,
+       "accn": "0001193125-09-153165",
+       "fy": 2009,
+       "fp": "Q3",
+       "form": "10-Q",
+       "filed": "2009-07-22",
+       "frame": "CY2009Q2I"
+      },
+      {
+       "end": "2009-10-16",
+       "val": 900678473,
+       "accn": "0001193125-09-214859",
+       "fy": 2009,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2009-10-27"
+      }
+     ]
+    }
+   }
+  },
+  "us-gaap": {
+   "Revenues": {
+    "label": "Revenues",
+    "description": "Amount of revenue recognized from goods sold, services rendered, insurance premiums, or other activities that constitute an earning process. Includes, but is not limited to, investment and interest income before deduction of interest expense when recognized as a component of revenue, and sales and trading gain (loss).",
+    "units": {
+     "USD": [
+      {
+       "start": "2015-09-27",
+       "end": "2016-09-24",
+       "val": 215639000000,
+       "accn": "0000320193-18-000145",
+       "fy": 2018,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2018-11-05",
+       "frame": "CY2016"
+      },
+      {
+       "start": "2016-09-25",
+       "end": "2016-12-31",
+       "val": 78351000000,
+       "accn": "0000320193-18-000145",
+       "fy": 2018,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2018-11-05",
+       "frame": "CY2016Q4"
+      }
+     ]
+    }
+   }
+  }
+ }
+}
