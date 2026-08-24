@@ -1,9 +1,11 @@
 # Labelling policy
 
-Two rules, fixed before Phase 2 begins. Both exist because deciding them
+Four rules, fixed before Phase 2 begins. Each exists because deciding it
 halfway through labelling would mean relabelling everything done so far.
 
-The gold set is hand-labelled. These rules are for the person doing it.
+The gold set is hand-labelled. These rules are for the person doing it, and the
+appendix at the end is the working reference: the anchors that find each field
+in a 10-K, and the commands that record what was found.
 
 ---
 
@@ -112,18 +114,211 @@ a known imperfection in the derivation, document it, and keep the labels.
 
 ---
 
-## Not yet decided: currency
+## Rule 3: cite the statement, not the discussion of it
 
-`Money` in `docintel/extraction/schema.py` assumes every amount is GBP. The
-corpus is now US filings reporting in dollars, so that assumption is wrong and
-the schema has nothing to flag it with. A figure would be stored as pounds and
-silently mis-scored.
+**For `revenue` and `net_income`, the citation is the line in the consolidated
+statement of operations. Not the MD&A, not a segment note, not the cash-flow
+reconciliation.**
 
-**A currency field has to land before the first gold label is written.** It is
-tracked as its own change rather than folded into the corpus swap, because it
-alters the type-level guarantees and the typing tests that pin them. See the
-tracking issue. The same change should settle `turnover` versus `revenue` and
-what `company_number` means now that it holds a CIK.
+The same figure is printed many times in a 10-K. In Apple's FY2025 filing the
+string "Net income" occurs five times: the income statement, the statement of
+comprehensive income, the statement of shareholders' equity, the top of the
+cash-flow reconciliation, and the earnings-per-share note. Across the corpus it
+occurs 416 times in the 25 documents that use the phrase at all. "Total revenue"
+occurs 89 times across 19 documents.
 
-Until that lands, no gold labels. A label written against the wrong currency is
-worse than no label, because it looks like progress.
+Every one of those is a true sentence containing the right number. Only one of
+them is where the figure is *stated*.
+
+### Why this has to be fixed before labelling, not during
+
+Without a rule, the choice gets made afresh at each label, and after an
+afternoon the gold set holds some statement citations and some MD&A citations
+with no record of which is which. In Phase 5 that inconsistency arrives as
+model error: a model that cites the income statement every time — which is the
+correct, consistent behaviour — scores badly on the labels that happened to be
+made from the MD&A, and the metric reports an extraction problem that is really
+a labelling problem.
+
+The statement is the right choice because it is the only occurrence that is a
+statement of the figure rather than a reference to it. The cash-flow line is
+the same number being used as the starting point of a different calculation;
+the segment note is a component; the MD&A is prose about it.
+
+### What this means for the model
+
+The eval compares a model's resolved citation to the gold span by containment
+(`spans_agree` in `docintel/gold.py`), so a model that cites the MD&A sentence
+is scored as ungrounded even when its value is right. That is intended, and it
+is what the metric is for: the claim being measured is "this model located the
+figure in the accounts", not "this model produced a number that happens to
+match".
+
+---
+
+## Rule 4: quote the linearisation, however ugly
+
+**A quote is evidence of location, not a presentable extract. If the derived
+text reads badly where the value is stated, quote what it actually says.**
+
+The case that forces this is JPMorgan's cover page. It is a two-column table,
+and `derive_text` linearises it row by row, so the text reads:
+
+```
+For the fiscal year ended Commission file
+
+December 31, 2024 number 1-5805
+```
+
+There is no contiguous "For the fiscal year ended December 31, 2024" anywhere
+in that document. The correct `period_end` quote is `December 31, 2024 number
+1-5805`, commission file number and all.
+
+The instinct while labelling is to reach for the tidy substring — to quote just
+`December 31, 2024`. Do not. On this document that string occurs many times, in
+the statements and the notes, and the labelling tool will refuse it as
+ambiguous. If it were unique it would be worse, because the label would then
+point at whichever other date in the document happened to read the same. The
+ugly quote is the one that identifies the place.
+
+Rule 3's containment comparison handles the other side of this: a model that
+cites only `December 31, 2024` from inside the gold span is scored as correct,
+because its span sits within the label's. The label carries the context; the
+model does not have to reproduce it.
+
+---
+
+## Settled: currency, and the field names
+
+The migration this document used to list as pending has landed.
+
+- `Money` now requires a `currency`, with no default. A default is how a wrong
+  assumption survives a change of corpus — the schema assumed GBP throughout
+  and these filings report dollars.
+- `turnover` is now `revenue`, and `profit_before_tax` is now `net_income`. The
+  names match the us-gaap XBRL concepts filers tag these lines with — `Revenues`
+  and `NetIncomeLoss` — which is what `companyfacts` is keyed by, so a hand
+  label can be cross-checked against the oracle without a translation table and
+  without the extraction path being involved at all.
+- `company_number` is gone. It held a UK company number; the EDGAR equivalent
+  is the CIK, and the CIK appears in **none** of the 36 derived texts, because
+  it is EDGAR's key for the filer rather than something the filer prints. A
+  field absent from every document is not an abstention test — it is a test of
+  whether a model learned to answer `not_stated` for one particular field, and
+  it would cost 36 of the 252 labels to run it. The Commission File Number and
+  the IRS employer identification number are both on the cover page and were
+  rejected for the opposite reason: they sit two lines from the company name
+  and would measure what `company_name` already measures.
+
+Seven fields, 36 documents, 252 labels.
+
+---
+
+# Appendix: where to look, and how to record it
+
+This is the part to keep open while labelling.
+
+## The tool
+
+```
+python scripts/label.py todo                       # the whole grid
+python scripts/label.py todo --field auditor_name  # one field, all documents
+python scripts/label.py add --entry-id 0000320193/0000320193-25 \
+    --field auditor_name --value "Ernst & Young LLP" \
+    --quote "We have served as the Company's auditor since 2009."
+python scripts/label.py add --entry-id 0000320193/0000320193-25 \
+    --field period_start --not-stated
+python scripts/label.py verify                     # after any derivation change
+python scripts/label.py anchors                    # the table below, re-measured
+```
+
+`--entry-id` takes any unambiguous fragment of an entry id. Money fields take
+the figure as printed plus the heading that scales it — `--amount 391,035
+--scale millions --currency USD` — and the tool does the multiplication. A
+quote that spans a blank line goes in through `--quote-file -`.
+
+The tool refuses a quote that occurs zero times or more than once, and says
+which. Both refusals are information: zero usually means a curly apostrophe or
+a line break inside the quote, and more than one means the quote is not
+specific enough to be a label.
+
+## The anchors
+
+Measured over the corpus with `python scripts/label.py anchors`. Every number
+below comes from that command, and the anchor list itself is `ANCHORS` in
+`docintel/gold.py`.
+
+```
+field            anchor                          docs  occurrences
+company_name     Exact name of registrant       24/36  24
+company_name     Exact name of Registrant        8/36  8
+period_start     (no anchor - never stated)      0/36
+period_end       For the fiscal year ended      30/36  30
+period_end       For the year ended             12/36  63
+period_end       for the year ended             30/36  590
+revenue          Total net revenue               6/36  81
+revenue          Total revenue                  19/36  89
+revenue          Total net sales                 2/36  11
+revenue          Net sales                       7/36  92
+revenue          Total sales and revenues        2/36  14
+net_income       Net income                     25/36  416
+net_income       Net earnings                    4/36  162
+net_income       Net loss                       17/36  89
+employee_count   Human Capital                  22/36  89
+employee_count   employees                      36/36  1772
+auditor_name     auditor since                  36/36  38
+```
+
+**company_name and period_end — the cover page.** Both are in the first block
+of the document, roughly the first 500 characters, after a slug of the form
+`aapl-20250927`. The company name sits immediately above `(Exact name of
+registrant as specified in its charter)`. Note the capital-R variant, and that
+four documents — Procter & Gamble and Microsoft, both years — linearise their
+cover page without that phrase at all.
+
+**period_end — `For the fiscal year ended`.** 30 of 36 spell it exactly that
+way on the cover page; the other six say `for the year ended`. Taking the three
+casings together, all 36 state their period end on the cover page. Beware that
+`for the year ended` also occurs 590 times in the notes: it is the first
+occurrence that is the cover page, not any occurrence, which is why the quote
+has to carry the date with it.
+
+**period_start — not present. This is the `not_stated` case.** Rule 1 was
+written before the corpus was fetched, and the corpus confirms it: JPMorgan and
+Etsy both state only the period end on their cover pages. Etsy is the sharpest
+illustration — the one place on that cover page where a start date could appear
+is the transition-period line, and on an annual report it reads `For the
+transition period from to`, with both dates blank. There is no string to quote,
+so the label is `not_stated`, all 36 times.
+
+**revenue — the top line of the consolidated statement of operations.** The
+caption varies by industry: banks say `Total net revenue`, retailers and
+manufacturers `Total net sales` or `Net sales`, Caterpillar `Total sales and
+revenues`, and most others `Total revenue`. Four documents — Novavax and
+Denali, both years — use none of the listed captions, and the statement has to
+be found by its title. Quote the caption *with its figures*: the caption alone
+occurs dozens of times, and the derived text puts the comparative years on one
+line, so `Total net sales 416,161 391,035 383,285` is a single quote covering
+three years and `--amount` is what picks the year being labelled.
+
+**net_income — `Net income`, in that same statement.** Not every filer has one.
+Goldman Sachs and Procter & Gamble say `Net earnings`; the loss-making filers
+say `Net loss`, which appears somewhere in 17 of the 36 documents; Caterpillar's
+income statement line is `Profit`. Rule 3 bites hardest here — 416 occurrences
+of `Net income` across 25 documents, in five different statements per filing.
+
+**employee_count — Item 1, under Human Capital.** 22 of 36 use that heading.
+All 36 contain the word `employees`, but 1,772 times between them, so the
+heading is the way in and the sentence around the number is the quote. Where
+the count is only derivable from a segment table, Rule 1 applies and the label
+is `not_stated`.
+
+**auditor_name — the sentence the PCAOB requires.** `We have served as the
+Company's auditor since ...` closes the audit report, with the firm's name
+immediately above it, usually as `/s/ Ernst & Young LLP`. The sentence is not
+verbatim across the corpus — most filings use a curly apostrophe, and the noun
+changes (`the Firm's` at JPMorgan, `the Corporation's` at Bank of America,
+`NEE's and FPL's` at NextEra) — but the fragment `auditor since` appears in all
+36. Two of them contain it twice: Simon Property Group files for two
+registrants and both audit reports carry the sentence. That ambiguity is real,
+and the tool will make you resolve it by extending the quote.

@@ -16,6 +16,7 @@ from pydantic import TypeAdapter, ValidationError
 from docintel.extraction.schema import (
     Citation,
     CompanyAccounts,
+    Currency,
     DocumentExtraction,
     Extracted,
     Failed,
@@ -39,7 +40,7 @@ def test_found_money_round_trips_and_keeps_its_generic_argument() -> None:
     # satisfied by nothing at all.
     adapter: TypeAdapter[Extracted[Money]] = TypeAdapter(Extracted[Money])
     original = Found[Money](
-        value=Money(amount=Decimal("4200000"), scale=Scale.THOUSANDS),
+        value=Money(amount=Decimal("4200000"), scale=Scale.THOUSANDS, currency=Currency.USD),
         citation=citation("4,200"),
     )
 
@@ -115,8 +116,8 @@ def test_failed_requires_a_non_empty_error() -> None:
 # --- absent is not the same as zero ----------------------------------------
 
 
-def test_zero_turnover_is_found_not_absent() -> None:
-    """A dormant company reporting nil turnover has stated a value.
+def test_zero_revenue_is_found_not_absent() -> None:
+    """A pre-revenue biotech reporting nil revenue has stated a value.
 
     This is the case that rules out Optional[T]: with None as the absence
     marker, a genuine reported zero and a missing field are the same value.
@@ -125,7 +126,8 @@ def test_zero_turnover_is_found_not_absent() -> None:
     restored = adapter.validate_json(
         adapter.dump_json(
             Found[Money](
-                value=Money(amount=Decimal("0"), scale=Scale.UNITS), citation=citation("0")
+                value=Money(amount=Decimal("0"), scale=Scale.UNITS, currency=Currency.USD),
+                citation=citation("0"),
             )
         )
     )
@@ -169,29 +171,48 @@ def test_citation_round_trips() -> None:
 
 
 def test_money_records_the_scale_that_was_applied() -> None:
-    """The thousands case: printed "4,200", grounded as printed, scored in pounds."""
+    """The thousands case: printed "4,200", grounded as printed, scored in units."""
     printed = citation("4,200")
-    money = Money(amount=Decimal("4200000"), scale=Scale.THOUSANDS)
+    money = Money(amount=Decimal("4200000"), scale=Scale.THOUSANDS, currency=Currency.USD)
 
     assert printed.quote == "4,200"
     assert money.amount == Decimal("4200000")
     assert money.scale is Scale.THOUSANDS
+    assert money.currency is Currency.USD
 
 
 def test_money_survives_json_without_losing_precision() -> None:
-    original = Money(amount=Decimal("1234567.89"), scale=Scale.UNITS)
+    original = Money(amount=Decimal("1234567.89"), scale=Scale.UNITS, currency=Currency.USD)
     assert Money.model_validate_json(original.model_dump_json()).amount == Decimal("1234567.89")
 
 
 @pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
 def test_money_rejects_non_finite_amounts(bad: str) -> None:
     with pytest.raises(ValidationError, match="finite"):
-        Money(amount=Decimal(bad), scale=Scale.UNITS)
+        Money(amount=Decimal(bad), scale=Scale.UNITS, currency=Currency.USD)
 
 
 def test_money_rejects_unknown_scale() -> None:
     with pytest.raises(ValidationError):
-        Money.model_validate({"amount": "1", "scale": "billions"})
+        Money.model_validate({"amount": "1", "scale": "billions", "currency": "USD"})
+
+
+def test_money_requires_a_currency() -> None:
+    # No default, deliberately. The schema assumed GBP for a UK corpus and the
+    # corpus is now US filings; a default would have carried that assumption
+    # into the gold set instead of failing here.
+    with pytest.raises(ValidationError):
+        Money.model_validate({"amount": "1", "scale": "units"})
+
+
+def test_money_rejects_unknown_currency() -> None:
+    with pytest.raises(ValidationError):
+        Money.model_validate({"amount": "1", "scale": "units", "currency": "XBT"})
+
+
+def test_money_round_trips_its_currency() -> None:
+    original = Money(amount=Decimal("391035000000"), scale=Scale.MILLIONS, currency=Currency.USD)
+    assert Money.model_validate_json(original.model_dump_json()) == original
 
 
 # --- the extraction record as a whole --------------------------------------
@@ -200,19 +221,18 @@ def test_money_rejects_unknown_scale() -> None:
 def full_accounts() -> CompanyAccounts:
     """A realistic mix: found fields, a genuine absence, and a failure."""
     return CompanyAccounts(
-        company_name=Found[str](value="Acme Ltd", citation=citation("Acme Ltd")),
-        company_number=Found[str](value="01234567", citation=citation("01234567")),
-        period_start=Found[date](value=date(2023, 1, 1), citation=citation("1 January 2023")),
-        period_end=Found[date](value=date(2023, 12, 31), citation=citation("31 December 2023")),
-        turnover=Found[Money](
-            value=Money(amount=Decimal("4200000"), scale=Scale.THOUSANDS),
+        company_name=Found[str](value="Acme Inc", citation=citation("Acme Inc")),
+        period_start=Found[date](value=date(2023, 1, 1), citation=citation("January 1, 2023")),
+        period_end=Found[date](value=date(2023, 12, 31), citation=citation("December 31, 2023")),
+        revenue=Found[Money](
+            value=Money(amount=Decimal("4200000"), scale=Scale.THOUSANDS, currency=Currency.USD),
             citation=citation("4,200"),
         ),
-        profit_before_tax=Found[Money](
-            value=Money(amount=Decimal("-15000"), scale=Scale.UNITS),
+        net_income=Found[Money](
+            value=Money(amount=Decimal("-15000"), scale=Scale.UNITS, currency=Currency.USD),
             citation=citation("(15,000)"),
         ),
-        # Audit-exempt company: no auditor exists to name.
+        # A filing that names no auditor: nothing to ground a name against.
         auditor_name=NotStated(),
         employee_count=Failed(error="model returned unparseable output"),
     )
@@ -224,23 +244,23 @@ def test_document_extraction_round_trips_with_mixed_states() -> None:
     restored = DocumentExtraction.model_validate_json(original.model_dump_json())
 
     assert restored == original
-    assert isinstance(restored.accounts.turnover, Found)
+    assert isinstance(restored.accounts.revenue, Found)
     assert isinstance(restored.accounts.auditor_name, NotStated)
     assert isinstance(restored.accounts.employee_count, Failed)
 
 
 def test_narrowing_on_status_is_how_a_value_is_read() -> None:
     """Documents the intended call-site shape that mypy enforces."""
-    turnover = full_accounts().turnover
-    assert_type(turnover, Found[Money] | NotStated | Failed)
+    revenue = full_accounts().revenue
+    assert_type(revenue, Found[Money] | NotStated | Failed)
 
-    if turnover.status == "found":
+    if revenue.status == "found":
         # Narrowing on the discriminator alone is enough for mypy to reach the
         # value; no isinstance check and no cast is needed at a call site.
-        assert_type(turnover, Found[Money])
-        assert turnover.value.amount == Decimal("4200000")
+        assert_type(revenue, Found[Money])
+        assert revenue.value.amount == Decimal("4200000")
     else:
-        pytest.fail("expected a found turnover")
+        pytest.fail("expected a found revenue")
 
 
 def test_negative_employee_count_is_rejected() -> None:
@@ -265,12 +285,27 @@ def test_unknown_field_is_rejected() -> None:
         DocumentExtraction.model_validate(payload)
 
 
+def test_company_number_is_no_longer_a_field() -> None:
+    # It held a UK company number; the EDGAR equivalent is the CIK, which
+    # appears in none of the 36 derived texts. Dropping it has to be visible in
+    # the type, not just in a docstring, or old payloads keep validating.
+    payload = full_accounts().model_dump()
+    payload["company_number"] = {
+        "status": "found",
+        "value": "0000320193",
+        "citation": {"chunk_id": "c", "start": 0, "end": 10, "quote": "0000320193"},
+    }
+
+    with pytest.raises(ValidationError):
+        CompanyAccounts.model_validate(payload)
+
+
 def test_wrong_typed_value_is_rejected_when_validated_through_the_model() -> None:
     # Pins the boundary described in Found's docstring: the runtime check comes
     # from the field annotation on CompanyAccounts, which is what every real
     # deserialisation path goes through.
     payload = full_accounts().model_dump()
-    payload["turnover"] = {
+    payload["revenue"] = {
         "status": "found",
         "value": "four million two hundred thousand",
         "citation": {"chunk_id": "c", "start": 0, "end": 5, "quote": "4,200"},

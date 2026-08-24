@@ -229,13 +229,15 @@ SEC EDGAR meets all four requirements, and meets the first one better.
 - **A genuine spread.** Filing size, table density and disclosure depth vary
   enormously across filers, and pre-revenue biotechs give real absent fields.
 
-There is a real cost to the swap, and it is worth naming rather than glossing:
-the extraction schema was written for UK accounts. `Money` assumes GBP, the
-field is called `turnover` rather than revenue, and `company_number` holds what
-is now a CIK. None of that is fixed yet — see `docs/labelling-policy.md` and
-the tracking issue — and all of it has to land before the first gold label is
-written, because a label written against the wrong currency is worse than no
-label.
+There was a real cost to the swap, and it is worth naming rather than glossing:
+the extraction schema was written for UK accounts. `Money` assumed GBP, the
+field was called `turnover` rather than revenue, and `company_number` held what
+is now a CIK. All of it had to land before the first gold label was written,
+because a label written against the wrong currency is worse than no label —
+and it has: `Money` requires a currency, the fields are `revenue` and
+`net_income`, and `company_number` is gone because the CIK appears in none of
+the 36 derived texts. See "Settled: currency, and the field names" in
+`docs/labelling-policy.md`.
 
 ## One thing that fell out of the swap: document size
 
