@@ -6,7 +6,7 @@ __pycache__/
 # ...but the documented, valueless template is committed.
 !.env.example
 data/cache/
-eval/results/*.raw.json
+eval/results/
 .claude/settings.local.json
 *.egg-info/
 .pytest_cache/

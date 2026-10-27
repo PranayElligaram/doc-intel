@@ -1,0 +1,68 @@
+{
+  "labels": [
+    {
+      "answer": {
+        "span": {
+          "end": 389349,
+          "quote": "/s/ PricewaterhouseCoopers LLP",
+          "start": 389319
+        },
+        "status": "stated",
+        "value": {
+          "kind": "text",
+          "text": "PricewaterhouseCoopers LLP"
+        }
+      },
+      "derivation_version": 1,
+      "entry_id": "0001370637/0001370637-25-000017",
+      "field": "auditor_name",
+      "labelled_at": "2026-08-24T01:10:24.363692Z"
+    },
+    {
+      "answer": {
+        "span": {
+          "end": 115359,
+          "quote": "we had approximately 2,400 total employees worldwide",
+          "start": 115307
+        },
+        "status": "stated",
+        "value": {
+          "count": 2400,
+          "kind": "count"
+        }
+      },
+      "derivation_version": 1,
+      "entry_id": "0001370637/0001370637-25-000017",
+      "field": "employee_count",
+      "labelled_at": "2026-08-24T00:59:16.582718Z"
+    },
+    {
+      "answer": {
+        "span": {
+          "end": 287,
+          "quote": "For the fiscal year ended December 31, 2024",
+          "start": 244
+        },
+        "status": "stated",
+        "value": {
+          "date": "2024-12-31",
+          "kind": "date"
+        }
+      },
+      "derivation_version": 1,
+      "entry_id": "0001370637/0001370637-25-000017",
+      "field": "period_end",
+      "labelled_at": "2026-08-24T00:59:07.993180Z"
+    },
+    {
+      "answer": {
+        "status": "not_stated"
+      },
+      "derivation_version": 1,
+      "entry_id": "0001370637/0001370637-25-000017",
+      "field": "period_start",
+      "labelled_at": "2026-08-24T00:41:07.132570Z"
+    }
+  ],
+  "version": 1
+}

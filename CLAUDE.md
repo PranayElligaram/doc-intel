@@ -1,6 +1,6 @@
 # doc-intel
 
-Structured extraction from UK company filings, with an evaluation harness that
+Structured extraction from SEC EDGAR filings, with an evaluation harness that
 measures grounding and abstention, not just accuracy.
 
 ## Environment

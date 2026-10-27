@@ -27,7 +27,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,app]"
 
       - name: Ruff
         run: ruff check .
@@ -36,7 +36,17 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy
-        run: mypy docintel scripts tests
+        run: mypy docintel scripts tests eval
 
       - name: Pytest
         run: pytest
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build app image
+        run: |
+          docker build --target test -t docintel-test:ci .
+          docker run --rm docintel-test:ci
+          docker build --target app -t docintel-app:ci .
