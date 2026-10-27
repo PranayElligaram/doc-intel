@@ -9,6 +9,7 @@ FROM base AS test
 COPY scripts ./scripts
 COPY eval ./eval
 COPY tests ./tests
+COPY data/ciks.txt ./data/ciks.txt
 RUN pip install --no-cache-dir ".[dev,app]"
 CMD ["python", "-m", "pytest", "-q"]
 
